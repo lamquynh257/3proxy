@@ -1,4 +1,5 @@
 #!/bin/sh
+
 random() {
   tr </dev/urandom -dc A-Za-z0-9 | head -c5
   echo
@@ -11,17 +12,18 @@ gen64() {
   }
   echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
+
 install_3proxy() {
   echo "installing 3proxy"
   URL="https://github.com/z3APA3A/3proxy/archive/0.9.3.tar.gz"
-  wget -qO- $URL | bsdtar -xvf-
+  wget -qO- $URL | tar -xzf-
   cd 3proxy-0.9.3
   make -f Makefile.Linux
   mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
   cp src/3proxy /usr/local/etc/3proxy/bin/
   cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy
   chmod +x /etc/init.d/3proxy
-  chkconfig 3proxy on
+  systemctl enable 3proxy
   cd $WORKDIR
 }
 
@@ -59,7 +61,6 @@ upload_proxy() {
   echo "Proxy is ready! Format IP:PORT:LOGIN:PASS"
   echo "Download zip archive from: ${URL}"
   echo "Password: ${PASS}"
-
 }
 
 install_jq() {
@@ -93,18 +94,19 @@ EOF
 
 gen_ifconfig() {
   cat <<EOF
-$(awk -F "/" '{print "ifconfig enp1s0 inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
+
 echo "installing apps"
-yum -y install gcc net-tools bsdtar zip >/dev/null
+dnf -y install gcc net-tools tar zip >/dev/null
 
 install_3proxy
 
 echo "working folder = /home/proxy-installer"
 WORKDIR="/home/proxy-installer"
 WORKDATA="${WORKDIR}/data.txt"
-mkdir $WORKDIR && cd $_
+mkdir -p $WORKDIR && cd $_
 
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
@@ -128,10 +130,12 @@ cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 10048
-service 3proxy start
+systemctl start 3proxy
 EOF
 
-bash /etc/rc.local
+chmod +x /etc/rc.local
+systemctl enable rc-local
+systemctl start rc-local
 
 gen_proxy_file_for_user
 
